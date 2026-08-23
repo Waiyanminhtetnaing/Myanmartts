@@ -182,7 +182,7 @@
     <div id="playerSection" class="card-box p-4 mb-6 hidden">
         <h3 class="font-medium mb-2 text-sm flex items-center gap-2"><i class="fa-solid fa-volume-high text-blue-400"></i> ထွက်လာသော အသံဖိုင်</h3>
         <audio id="audioPlayer" controls class="w-full mb-3"></audio>
-        <a id="downloadLink" download="ai-voice.mp3" class="block text-center bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium"><i class="fa-solid fa-download"></i> Download MP3</a>
+        <a id="downloadLink" download="ai-voice.wav" class="block text-center bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-medium"><i class="fa-solid fa-download"></i> Download WAV</a>
     </div>
 
     <script>
@@ -263,6 +263,40 @@
             alert('API Key ဖျက်ပြီးပါပြီ');
         }
 
+        // Raw PCM ကို WAV ဖိုင်အဖြစ် ပြောင်းပေးမည့် Function
+        function pcmToWavBlob(pcmBytes, sampleRate = 24000, numChannels = 1, bitsPerSample = 16) {
+            const dataLength = pcmBytes.length;
+            const buffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(buffer);
+
+            function writeString(offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(8, 'WAVE');
+
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true); // SubChunk1Size (16 for PCM)
+            view.setUint16(20, 1, true); // AudioFormat (1 for PCM)
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+            view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+            view.setUint16(34, bitsPerSample, true);
+
+            writeString(36, 'data');
+            view.setUint32(40, dataLength, true);
+
+            const pcmView = new Uint8Array(buffer, 44);
+            pcmView.set(pcmBytes);
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
         async function generateVoice() {
             const key = document.getElementById('apiKeyInput').value.trim();
             const text = document.getElementById('textInput').value.trim();
@@ -330,12 +364,14 @@
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'audio/mp3' });
+
+                // Raw PCM ကို WAV Format သို့ ပြောင်းလဲခြင်း
+                const blob = pcmToWavBlob(byteArray, 24000, 1, 16);
                 const audioUrl = URL.createObjectURL(blob);
 
                 const player = document.getElementById('audioPlayer');
                 player.src = audioUrl;
-                player.playbackRate = speed; // Voice Speed သတ်မှတ်ချက်
+                player.playbackRate = speed;
                 document.getElementById('downloadLink').href = audioUrl;
                 document.getElementById('playerSection').classList.remove('hidden');
                 player.play();
@@ -350,3 +386,4 @@
     </script>
 </body>
 </html>
+
